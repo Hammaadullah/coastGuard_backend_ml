@@ -8,11 +8,13 @@ export async function createUser(
     phone: string
 ): Promise<User> {
     const sql = `
-    INSERT INTO users (user_name, email, hashed_password, phone)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO users (user_name, email, hashed_password, phone, user_role_id)
+    VALUES ($1, $2, $3, $4, 1)
     RETURNING user_id, user_name, email, phone, created_at
   `;
-    return (await queryOne<User>(sql, [userName, email, hashedPassword, phone]))!;
+    const user = await queryOne<User>(sql, [userName, email, hashedPassword, phone]);
+
+    return user!;
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {

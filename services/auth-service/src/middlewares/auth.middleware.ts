@@ -1,36 +1,33 @@
-import type { Request, Response, NextFunction } from "express";
-import { verifyAccessToken } from "../jwt.js";
-import { pool } from "../db.js";
+import { HTTP_RESPONSE_CODE } from "../constants/api.response.codes.js";
+import { ApiError } from "../utils/api.error.js";
+import jwt from "jsonwebtoken";
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-    const a = req.get("Authorization") || "";
-    const parts = a.split(" ");
-    if (parts.length !== 2 || parts[0] !== "Bearer") return res.status(401).json({ error: "no token" });
-    // workaround to not get typescript to yell at me for assigning string | undefined to string.
-    const token: string = parts[1] || "";
+export function authMiddleware(req: any, res: any, next: any) {
+    //  Get the token from the Authorization header
+    const authHeader = req.headers['authorization'];
 
-    try {
-        const payload: any = verifyAccessToken(token);
-        // check session in DB
-        const s = await pool.query("SELECT revoked, expires_at FROM sessions WHERE session_id=$1", [payload.session_id]);
-        if (s.rowCount === 0) return res.status(401).json({ error: "session not found" });
-        const session = s.rows[0];
-        if (session.revoked || new Date(session.expires_at) < new Date()) return res.status(401).json({ error: "session revoked/expired" });
+    //  Extract the token from the "Bearer <token>" string
+    const token = authHeader && authHeader.split(' ')[1];
 
-        // attach user info
-        (req as any).auth = { user_id: payload.sub, role: payload.role, session_id: payload.session_id };
-        return next();
-    } catch (err) {
-        return res.status(401).json({ error: "invalid_token" });
+    if (!token) {
+        // Use 'return next()' for async errors, or just throw if your framework handles it
+        throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "No token provided, authorization denied");
     }
+
+    //  Verify the token
+    jwt.verify(token, process.env.JWT_SECRET || "", (err: any, decoded: any) => {
+        if (err) {
+            // Use 'return next(err)' or throw if your framework handles it
+            throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "Invalid token");
+        }
+
+        //  Attach user payload to the request object
+        req.userId = decoded.sub;
+        req.userName = decoded.user_name;
+        req.role = decoded.role;
+
+        next();
+    });
 }
 
-export function requireRole(roleId: number) {
-    return (req: Request, res: Response, next: NextFunction) => {
-        const a = (req as any).auth;
-        if (!a) return res.status(401).json({ error: "unauth" });
-        if (a.role !== roleId) return res.status(403).json({ error: "forbidden" });
-        return next();
-    };
-
-}
+export default authMiddleware;

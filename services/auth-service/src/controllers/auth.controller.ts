@@ -7,11 +7,29 @@ import { HTTP_RESPONSE_CODE } from "../constants/api.response.codes.js";
 
 const saltRounds = 12;
 
+export async function getProfile(req: any, res: any) {
+    const userId = req.userId;
+    if (!userId)
+        throw new ApiError(HTTP_RESPONSE_CODE.BAD_REQUEST, "No userId in token");
+
+    const user = await authServices.findUserById(userId);
+
+    if (!user)
+        throw new ApiError(HTTP_RESPONSE_CODE.NOT_FOUND, "No user exists with given userId");
+
+    return res.status(HTTP_RESPONSE_CODE.SUCCESS).json(
+        new ApiResponse(
+            user,
+            "User details returned"
+        )
+    )
+}
+
 export async function register(req: any, res: any) {
     const { userName, email, password, phone } = req.body;
 
     // encrypt the password
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const hashedPassword = bcrypt.hashSync(password, saltRounds);
 
     const userEmailExists = await authServices.findUserByEmail(email);
     if (userEmailExists) {
@@ -24,7 +42,7 @@ export async function register(req: any, res: any) {
 
     const user = await authServices.createUser(userName, email, hashedPassword, phone);
 
-    const payload = { user_id: user.user_id, user_name: user.user_name, role: user.user_role_id }
+    const payload = { user_id: user.user_id, user_name: user.user_name, role: "normal_user" }
 
     const token = jwt.sign(payload, process.env.JWT_SECRET || "super-secret", {
         expiresIn: "30d", // tokens expires after longer time if remember me option is selected
@@ -32,7 +50,7 @@ export async function register(req: any, res: any) {
 
     res.status(HTTP_RESPONSE_CODE.CREATED)
         .json(
-            new ApiResponse({ token: token, userName: user.user_name }, "User registered successfuly"),
+            new ApiResponse({ token: token, userName: user.user_name, role: "normal_user" }, "User registered successfuly"),
         );
 }
 
@@ -45,7 +63,9 @@ export async function login(req: any, res: any) {
         throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "Wrong Email or password");
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.hashed_password || "");
+    console.log(user);
+
+    const isPasswordValid = bcrypt.compareSync(password, user.hashed_password || "");
     if (!isPasswordValid) {
         throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "Wrong Email or password");
     }
@@ -58,7 +78,7 @@ export async function login(req: any, res: any) {
 
     res.status(HTTP_RESPONSE_CODE.CREATED)
         .json(
-            new ApiResponse({ token: token, userName: user.user_name }, "User Logged in successfuly"),
+            new ApiResponse({ token: token, userName: user.user_name, role: "normal_user" }, "User Logged in successfuly"),
         );
 }
 
