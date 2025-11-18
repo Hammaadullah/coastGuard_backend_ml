@@ -12,5 +12,7 @@ RUN --mount=type=cache,target=/usr/src/app/.npm \
 
 COPY . .
 
-CMD ["npm", "run", "dev"]
+RUN ["npm", "run", "build"]
+
+CMD ["npm", "run", "start"]
 
