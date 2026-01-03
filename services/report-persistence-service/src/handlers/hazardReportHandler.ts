@@ -1,9 +1,13 @@
+import { time } from "console";
 import { pool } from "../db.js";
 
 export async function saveHazardReport(msg: any) {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
+
+        const timestampz = await client.query(`SELECT to_timestamp($1/ 1000.0) AS timestamptz_value`, [msg.report_time]);
+        const report_time = timestampz.rows[0].timestamptz_value;
 
         // 1) Lookup hazard_type_id
         const hazardQ = `SELECT type_id FROM hazard_types WHERE type_name = $1`;
@@ -47,7 +51,7 @@ export async function saveHazardReport(msg: any) {
             msg.location.name,      // $6
             sentiment_id,           // $7
             msg.relevance_score,    // $8
-            msg.report_time,        // $9
+            report_time,        // $9
             media_id,               // $10 (nullable)
             1                       // $11 default status_id
         ];

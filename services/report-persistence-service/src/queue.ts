@@ -15,9 +15,9 @@ export async function startQueueConsumer() {
         if (!msg) return;
 
         try {
-            const data = JSON.parse(msg.content.toString());
+            const data = JSON.parse(msg.content.toString())[0];
 
-            if (data.platform === "coastGuard") {
+            if (data.platform === "coast_guard") {
                 const report_id = await saveHazardReport(data);
                 console.log(report_id);
             } else {

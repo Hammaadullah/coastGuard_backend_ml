@@ -1,6 +1,15 @@
 import { HTTP_RESPONSE_CODE } from "../constants/api.response.codes.js";
 import { ApiError } from "../utils/api.error.js";
 import jwt from "jsonwebtoken";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const publicKey = fs.readFileSync(path.join(__dirname, "../../keys/public.pem"));
 
 export function authMiddleware(req: any, res: any, next: any) {
     //  Get the token from the Authorization header
@@ -14,13 +23,13 @@ export function authMiddleware(req: any, res: any, next: any) {
     }
 
     //  Verify the token
-    jwt.verify(token, process.env.JWT_SECRET || "", (err: any, decoded: any) => {
+    jwt.verify(token, publicKey, { algorithms: ["RS256"] }, (err: any, decoded: any) => {
         if (err) {
             throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "Invalid token");
         }
 
         //  Attach user payload to the request object
-        req.userId = decoded.sub;
+        req.userId = decoded.user_id;
         req.userName = decoded.user_name;
         req.role = decoded.role;
 

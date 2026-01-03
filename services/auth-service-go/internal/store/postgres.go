@@ -68,10 +68,10 @@ func (s *Storage) GetUserRoleByID(roleID int) (string, error) {
 	return roleName, nil
 }
 
-func (s *Storage) GetUserByID(ID int) (*models.User, error) {
-	user := &models.User{}
-	query := `SELECT email, hashed_password FROM users WHERE user_id = $1`
-	err := s.DB.QueryRow(query, ID).Scan(&user.Email, &user.Password)
+func (s *Storage) GetUserByID(ID int) (*models.UserPublic, error) {
+	user := &models.UserPublic{}
+	query := `SELECT email, user_name, role_name, user_id FROM users, user_roles WHERE user_id = $1 AND user_role_id = role_id`
+	err := s.DB.QueryRow(query, ID).Scan(&user.Email, &user.Username, &user.Role, &user.ID)
 
 	if err != nil {
 		return nil, err

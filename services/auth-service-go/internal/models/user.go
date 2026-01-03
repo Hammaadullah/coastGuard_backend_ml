@@ -12,13 +12,21 @@ type User struct {
 	Password string `json:"password"`
 }
 
+type UserPublic struct {
+	ID       int
+	Email    string
+	Username string
+	Role     string
+}
+
 type Token struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
 type Claims struct {
-	UserID int    `json:"user_id"`
-	Email  string `json:"email"`
-	Role   string `json:"user_role"`
+	UserID   int    `json:"user_id"`
+	UserName string `json:"user_name"`
+	Email    string `json:"email"`
+	Role     string `json:"user_role"`
 	jwt.RegisteredClaims
 }

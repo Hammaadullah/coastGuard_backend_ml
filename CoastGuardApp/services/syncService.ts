@@ -35,7 +35,7 @@ export const syncReports = async () => {
             }
 
             // Note: Do NOT set Content-Type manually; Axios/Fetch sets it with boundary for FormData
-            await api.post('/reports', formData, {
+            await api.post('/reports/', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },

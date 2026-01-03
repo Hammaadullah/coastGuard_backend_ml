@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { saveToken, getToken, deleteToken } from '@/utils/storage';
 
 interface User {
+    userID: string;
     userName: string;
     role: string;
 }

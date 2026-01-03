@@ -26,9 +26,9 @@ export default function RegisterScreen() {
                 user_role: "citizen",
             });
 
-            const { access_token: accessToken, refresh_token: refreshToken, user_name: userName, user_role: role } = response.data;
+            const { user_id: userID, access_token: accessToken, refresh_token: refreshToken, user_name: userName, user_role: role } = response.data;
 
-            await register(accessToken, refreshToken, { userName, role });
+            await register(accessToken, refreshToken, { userID, userName, role });
 
         } catch (error: any) {
             const msg = error.response?.data?.message || 'Login failed';

@@ -36,7 +36,7 @@ export default function RootLayout() {
         } else if (accessToken && inAuthGroup) {
             // Redirect to app if accessToken exists and user is in auth group
             // Default to citizen for now, specific routing happens in login
-            router.replace('/(app)/citizen/home');
+            router.replace('/citizen');
         }
     }, [accessToken, isLoading, segments]);
 
