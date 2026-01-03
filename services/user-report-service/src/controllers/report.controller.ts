@@ -5,17 +5,27 @@ import { apiResponse } from "../utils/api.response.js";
 import { logger } from "../utils/logger.js";
 import { ApiError } from "../utils/api.error.js";
 import { HTTP_RESPONSE_CODE } from "../constants/api.response.codes.js";
+import crypto from "crypto"
 
 // POST /reports
 export async function createReportHandler(req: any, res: Response) {
     const user_id = req.userId;
     const user_name = req.userName;
+    const skip = req.body.skip || false;
     const text = req.body.text || null;
-    const type_id = req.body.type_id ? Number(req.body.type_id) : null;
+    const report_type = req.body.type;
     const lat = Number(req.body.latitude);
     const lon = Number(req.body.longitude);
+    const reported_at = req.body.timestamp;
+    const incomingMediaUrl = req.body.mediaUrl;
+    let priority = "low";
 
-    if (!text && (!req.files || (req.files as Express.Multer.File[]).length === 0)) {
+    if (report_type === "tsunami" || report_type === "oil-spill")
+        priority = "high";
+    else if (report_type === "flood")
+        priority = "medium"
+
+    if (!text && !incomingMediaUrl) {
         throw new ApiError(HTTP_RESPONSE_CODE.BAD_REQUEST, "Either 'text' or 'media' must be provided");
     }
     if (isNaN(lat) || isNaN(lon)) {
@@ -24,30 +34,25 @@ export async function createReportHandler(req: any, res: Response) {
 
     const client = await pool.connect();
     try {
-
-        const defaultStatusId = 1;
         const location_name = req.body.location_name || null;
 
-        const files = (req.files as Express.Multer.File[]) || [];
         let mediaUrls: string[] = [];
-        if (files.length) {
-            for (const file of files) {
-                const mediaUrl = `/uploads/${file.filename}`;
-                mediaUrls.push(mediaUrl);
-            }
+        if (incomingMediaUrl) {
+            mediaUrls.push(incomingMediaUrl);
         }
 
         const messageId = crypto.randomUUID();
         const message = {
             id: messageId,
+            skip: skip,
             user: { id: user_id, name: user_name, username: user_name },
             type: "user-post",
             text,
             location: { lat, lon, name: location_name },
             media: mediaUrls,
-            platform: "coastGuard",
-            created_at: new Date(Date.now()).toISOString(),
-            extra: {}
+            platform: "coast_guard",
+            created_at: Date.now(),
+            extra: { alert_level: priority, hazard_type: report_type }
         };
         await publishUserReport(message);
 
@@ -63,6 +68,7 @@ export async function createReportHandler(req: any, res: Response) {
 
 // GET /reports
 export async function getReportsHandler(req: Request, res: Response) {
+    console.log("HIT")
     const lat = req.query.lat ? Number(req.query.lat) : null;
     const lon = req.query.lon ? Number(req.query.lon) : null;
     const radius_km = req.query.radius_km ? Number(req.query.radius_km) : null;
@@ -88,7 +94,7 @@ export async function getReportsHandler(req: Request, res: Response) {
     let whereClauses: string[] = ["is_deleted = false"];
     if (!isNaN(Number(type_id))) {
         params.push(type_id);
-        whereClauses.push(`hazard_reports.type_id = $${params.length}`);
+        whereClauses.push(`hazard_reports.hazard_type_id = $${params.length}`);
     }
     if (status) {
         if (!isNaN(Number(status))) {
@@ -115,9 +121,9 @@ export async function getReportsHandler(req: Request, res: Response) {
       report_statuses.status_name,
       COALESCE(array_agg(report_media.media_url) FILTER (WHERE report_media.media_url IS NOT NULL), '{}') as media_urls
     FROM hazard_reports
-    LEFT JOIN hazard_types ON hazard_reports.type_id = hazard_types.type_id
+    LEFT JOIN hazard_types ON hazard_reports.hazard_type_id = hazard_types.type_id
     LEFT JOIN report_statuses ON hazard_reports.status_id = report_statuses.status_id
-    LEFT JOIN report_media ON hazard_reports.report_id = report_media.report_id
+    LEFT JOIN report_media ON hazard_reports.media_id = report_media.media_id
     WHERE ${whereClauses.join(" AND ")} ${radiusClause}
     GROUP BY hazard_reports.report_id, hazard_types.type_name, report_statuses.status_name
     ORDER BY hazard_reports.report_time DESC
@@ -125,6 +131,7 @@ export async function getReportsHandler(req: Request, res: Response) {
   `;
     params.push(limit);
     const { rows } = await pool.query(baseQuery, params);
+    console.log(rows);
     return res.json(apiResponse(true, "Reports fetched", rows));
 }
 
@@ -143,7 +150,7 @@ export async function getMyReportsHandler(req: any, res: Response) {
 
     if (!isNaN(Number(type_id))) {
         params.push(type_id);
-        whereClauses.push(`hazard_reports.type_id = $${params.length}`);
+        whereClauses.push(`hazard_reports.hazard_type_id = $${params.length}`);
     }
     if (status) {
         if (!isNaN(Number(status))) {
@@ -170,9 +177,9 @@ export async function getMyReportsHandler(req: any, res: Response) {
       report_statuses.status_name,
       COALESCE(array_agg(report_media.media_url) FILTER (WHERE report_media.media_url IS NOT NULL), '{}') as media_urls
     FROM hazard_reports
-    LEFT JOIN hazard_types ON hazard_reports.type_id = hazard_types.type_id
+    LEFT JOIN hazard_types ON hazard_reports.hazard_type_id = hazard_types.type_id
     LEFT JOIN report_statuses ON hazard_reports.status_id = report_statuses.status_id
-    LEFT JOIN report_media ON hazard_reports.report_id = report_media.report_id
+    LEFT JOIN report_media ON hazard_reports.media_id = report_media.media_id
     WHERE ${whereClauses.join(" AND ")} ${radiusClause}
     GROUP BY hazard_reports.report_id, hazard_types.type_name, report_statuses.status_name
     ORDER BY hazard_reports.report_time DESC
@@ -181,4 +188,48 @@ export async function getMyReportsHandler(req: any, res: Response) {
     params.push(limit);
     const { rows } = await pool.query(baseQuery, params);
     return res.json(apiResponse(true, "User reports fetched", rows));
+}
+
+export async function verifyReport(req: any, res: any) {
+    const userID = req.userId;
+    const userRole = req.role;
+    const reportID = req.params.report_id;
+
+    if (!userID || !userRole)
+        throw new ApiError(HTTP_RESPONSE_CODE.BAD_REQUEST, "userID and userRole required for report verification");
+
+    if (userRole != "official")
+        throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "Only officials permitted to verify reports");
+
+    const query = `
+        UPDATE hazard_reports
+        SET verified_by = $1, status_id = 2
+        WHERE report_id = $2
+    `
+
+    await pool.query(query, [userID, reportID]);
+
+    res.status(HTTP_RESPONSE_CODE.SUCCESS).json(apiResponse(true, "report verified successfully"))
+}
+
+export async function debunkReport(req: any, res: any) {
+    const userID = req.userId;
+    const userRole = req.role;
+    const reportID = req.body.report_id;
+
+    if (!userID || !userRole)
+        throw new ApiError(HTTP_RESPONSE_CODE.BAD_REQUEST, "userID and userRole required for report verification");
+
+    if (userRole != "official")
+        throw new ApiError(HTTP_RESPONSE_CODE.UNAUTHORIZED, "Only officials permitted to verify reports");
+
+    const query = `
+        UPDATE hazard_reports
+        SET verified_by = $1, status_id = 4
+        WHERE report_id = $2
+    `
+
+    await pool.query(query, [userID, reportID]);
+
+    res.status(HTTP_RESPONSE_CODE.SUCCESS).json(apiResponse(true, "report debunked successfully"))
 }
