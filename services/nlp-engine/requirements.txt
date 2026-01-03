@@ -1,0 +1,9 @@
+cat > requirements.txt <<'EOF'
+openai
+requests
+pika
+python-dotenv
+torch
+transformers
+pillow
+EOF
